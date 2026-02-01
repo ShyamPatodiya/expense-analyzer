@@ -8,7 +8,7 @@ export function useFilters(
   return useMemo(() => {
     let result = [...transactions];
 
-    const { dateRange, amountRange, transactionType, searchText, categories } =
+    const { dateRange, amountRange, transactionType, searchText, categories, banks } =
       filters;
 
     if (dateRange.start) {
@@ -50,6 +50,14 @@ export function useFilters(
       result = result.filter((t) => {
         const cat = (t.category ?? 'Uncategorized').toLowerCase();
         return catLower.includes(cat);
+      });
+    }
+
+    if (banks.length > 0) {
+      const bankLower = banks.map((b) => (b ?? '').toLowerCase());
+      result = result.filter((t) => {
+        const bank = (t.bank ?? '').toLowerCase();
+        return bankLower.includes(bank);
       });
     }
 

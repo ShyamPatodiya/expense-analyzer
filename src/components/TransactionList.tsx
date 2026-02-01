@@ -52,7 +52,7 @@ function cell(value: string | number | undefined | null): string {
   return String(value);
 }
 
-type SortKey = 'transactionDate' | 'transactionDetails' | 'chqRefNo' | 'debitCredit' | 'balance' | 'category';
+type SortKey = 'transactionDate' | 'transactionDetails' | 'chqRefNo' | 'debitCredit' | 'balance' | 'category' | 'bank';
 type SortDir = 'asc' | 'desc';
 
 interface TransactionListProps {
@@ -81,6 +81,9 @@ function compare(a: Transaction, b: Transaction, key: SortKey, dir: SortDir): nu
       break;
     case 'category':
       diff = (a.category ?? '').localeCompare(b.category ?? '');
+      break;
+    case 'bank':
+      diff = (a.bank ?? '').localeCompare(b.bank ?? '');
       break;
     default:
       return 0;
@@ -223,6 +226,7 @@ export function TransactionList({
       Date: format(t.transactionDate, 'yyyy-MM-dd'),
       Details: t.transactionDetails,
       'Chq/Ref': t.chqRefNo,
+      Bank: t.bank ?? '',
       Amount: t.debitCredit < 0 ? Math.abs(t.debitCredit) : t.debitCredit,
       'Dr/Cr': t.debitCredit < 0 ? 'DR' : 'CR',
       Balance: t.balance,
@@ -336,6 +340,7 @@ export function TransactionList({
               <SortHeader columnKey="transactionDate" label="Date" />
               <SortHeader columnKey="transactionDetails" label="Details" />
               <SortHeader columnKey="chqRefNo" label="Ref No" />
+              <SortHeader columnKey="bank" label="Bank" />
               <SortHeader columnKey="debitCredit" label="Amount (DR/CR)" align="right" />
               <SortHeader columnKey="balance" label="Balance" align="right" />
               <SortHeader columnKey="category" label="Category" />
@@ -343,7 +348,13 @@ export function TransactionList({
             </tr>
           </thead>
           <tbody>
-            {pageData.map((t) => (
+            {pageData.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                  No data
+                </td>
+              </tr>
+            ) : pageData.map((t) => (
               <tr
                 key={t.id}
                 className={`border-t border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${selectedIds.has(t.id) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
@@ -362,6 +373,7 @@ export function TransactionList({
                   {cell(t.transactionDetails)}
                 </td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{cell(t.chqRefNo)}</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{cell(t.bank)}</td>
                 <td className="px-3 py-2 text-right">
                   {t.debitCredit === 0 ? (
                     EMPTY

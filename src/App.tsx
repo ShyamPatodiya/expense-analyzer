@@ -18,6 +18,7 @@ const DEFAULT_FILTERS: FilterOptions = {
   transactionType: 'all',
   searchText: '',
   categories: [],
+  banks: [],
 };
 
 const DARK_MODE_KEY = 'expense_analyzer_dark';
@@ -169,6 +170,9 @@ function AppWithRouter({ logout }: { logout: () => void }) {
   const categories = Array.from(
     new Set(transactions.map((t) => t.category ?? 'Uncategorized').filter(Boolean))
   ).sort();
+  const banks = Array.from(
+    new Set(transactions.map((t) => t.bank).filter((b): b is string => Boolean(b?.trim())))
+  ).sort();
   // When no date filter is set, use all data so charts aren't empty (e.g. data from past months)
   const dateRangeForCharts =
     filters.dateRange.start && filters.dateRange.end
@@ -197,6 +201,7 @@ function AppWithRouter({ logout }: { logout: () => void }) {
                 filters={filters}
                 onChange={setFilters}
                 categories={categories}
+                banks={banks}
               />
               {loading ? (
                 <p className="text-gray-500 dark:text-gray-400">Loading...</p>

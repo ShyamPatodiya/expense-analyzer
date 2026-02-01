@@ -12,31 +12,46 @@ export interface ParseResult {
   metadata?: StatementMetadata;
 }
 
-/** Check if a row looks like a transaction header (has Transaction Date, Amount/Balance, etc.) */
+/** Check if a row looks like a transaction header (has Transaction Date/Date, Amount/Balance, etc.) */
 function isTransactionHeaderRow(cells: string[]): boolean {
   const joined = cells.join(' ').toLowerCase();
-  return (
-    joined.includes('transaction date') &&
-    (joined.includes('amount') || joined.includes('balance') || joined.includes('debit') || joined.includes('credit'))
-  );
+  const hasDate =
+    joined.includes('transaction date') ||
+    joined.includes('value date') ||
+    (joined.includes('date') && (joined.includes('transaction') || joined.includes('value')));
+  const hasAmount =
+    joined.includes('amount') ||
+    joined.includes('balance') ||
+    joined.includes('debit') ||
+    joined.includes('credit');
+  return hasDate && hasAmount;
 }
 
-/** Check if a data row looks like a transaction (first cell is numeric = Sl. No., or second cell looks like date) */
+// dd/mm/yyyy, dd-mm-yyyy, or dd-MMM-yyyy (Excel: 21-Sep-2025)
+const DATE_LIKE = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|^\d{1,2}-[A-Za-z]{3}-\d{2,4}/;
+
+/** Check if a data row looks like a transaction (Sl. No., date in second col, or date in any col) */
 function looksLikeTransactionRow(row: Record<string, string>, columns: string[]): boolean {
   const firstCol = columns[0];
   const val = (row[firstCol] ?? '').trim();
   if (/^\d+$/.test(val)) return true; // Sl. No.
   const secondCol = columns[1] ?? columns[0];
   const secondVal = (row[secondCol] ?? '').trim();
-  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(secondVal)) return true; // date in second column
+  if (DATE_LIKE.test(secondVal)) return true; // date in second column
+  // Excel or alternate formats: any column looks like date
+  for (const col of columns) {
+    if (DATE_LIKE.test((row[col] ?? '').trim())) return true;
+  }
   return false;
 }
 
-/** Check if row is footer (Closing balance, contact info, etc.) */
+/** Check if row is footer (Closing balance, summary block, contact info, etc.) */
 function isFooterRow(cells: string[]): boolean {
   const first = (cells[0] ?? '').toLowerCase();
   return (
     first.includes('closing balance') ||
+    first.includes('opening balance') ||
+    first.includes('total debit') ||
     first.includes('you may call') ||
     first.includes('write to us') ||
     first.includes('customer contact')
@@ -78,6 +93,61 @@ function extractMetadata(rawRows: string[][]): StatementMetadata {
 }
 
 /**
+ * Process raw rows (from CSV or Excel) into ParseResult: detect header, metadata, footer, transaction rows.
+ * Shared by parseCSV and parseXLSX so both formats use the same structure.
+ */
+function processRawRows(rawRows: string[][]): ParseResult {
+  if (rawRows.length === 0) {
+    return { data: [], columns: [] };
+  }
+
+  let headerIndex = -1;
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    if (isTransactionHeaderRow(row)) {
+      headerIndex = i;
+      break;
+    }
+  }
+
+  let columns: string[];
+  let dataRows: string[][];
+  let metadata: StatementMetadata | undefined;
+
+  if (headerIndex >= 0) {
+    const headerRow = rawRows[headerIndex];
+    const seen = new Map<string, number>();
+    columns = headerRow.map((c, i) => {
+      const name = (c ?? '').trim() || `Col_${i}`;
+      const count = seen.get(name) ?? 0;
+      seen.set(name, count + 1);
+      return count === 0 ? name : `${name} (${count + 1})`;
+    });
+    const metaRows = rawRows.slice(0, headerIndex);
+    metadata = extractMetadata(metaRows);
+    dataRows = rawRows.slice(headerIndex + 1);
+  } else {
+    const first = rawRows[0];
+    columns = first.map((c, i) => (c ?? '').trim() || `Column${i}`);
+    dataRows = rawRows.slice(1);
+  }
+
+  const data: Record<string, string>[] = [];
+  for (const row of dataRows) {
+    if (isFooterRow(row)) break;
+    const obj: Record<string, string> = {};
+    columns.forEach((col, i) => {
+      obj[col] = (row[i] ?? '').trim();
+    });
+    if (!Object.values(obj).some((v) => v)) continue;
+    data.push(obj);
+  }
+
+  const transactionData = data.filter((row) => looksLikeTransactionRow(row, columns));
+  return { data: transactionData, columns, metadata };
+}
+
+/**
  * Parse CSV: detect transaction header row, extract metadata from rows above, return only transaction data.
  * Supports bank statements with leading metadata rows and footer.
  */
@@ -93,66 +163,64 @@ export function parseCSV(file: File): Promise<ParseResult> {
           return;
         }
         const rawRows = (results.data as string[][]).filter((row) => Array.isArray(row) && row.length > 0);
-        if (rawRows.length === 0) {
-          resolve({ data: [], columns: [] });
-          return;
-        }
-
-        // Find transaction header row
-        let headerIndex = -1;
-        for (let i = 0; i < rawRows.length; i++) {
-          const row = rawRows[i] as string[];
-          if (isTransactionHeaderRow(row)) {
-            headerIndex = i;
-            break;
-          }
-        }
-
-        let columns: string[];
-        let dataRows: string[][];
-        let metadata: StatementMetadata | undefined;
-
-        if (headerIndex >= 0) {
-          const headerRow = rawRows[headerIndex] as string[];
-          const seen = new Map<string, number>();
-          columns = headerRow.map((c, i) => {
-            const name = (c ?? '').trim() || `Col_${i}`;
-            const count = seen.get(name) ?? 0;
-            seen.set(name, count + 1);
-            return count === 0 ? name : `${name} (${count + 1})`;
-          });
-          const metaRows = rawRows.slice(0, headerIndex) as string[][];
-          metadata = extractMetadata(metaRows);
-          dataRows = rawRows.slice(headerIndex + 1) as string[][];
-        } else {
-          // Fallback: first row is header (original behavior)
-          const first = rawRows[0] as string[];
-          columns = first.map((c, i) => (c ?? '').trim() || `Column${i}`);
-          dataRows = rawRows.slice(1) as string[][];
-        }
-
-        // Convert data rows to objects; stop at footer
-        const data: Record<string, string>[] = [];
-        for (const row of dataRows) {
-          if (isFooterRow(row)) break;
-          const obj: Record<string, string> = {};
-          columns.forEach((col, i) => {
-            obj[col] = (row[i] ?? '').trim();
-          });
-          if (!Object.values(obj).some((v) => v)) continue; // skip fully empty
-          data.push(obj);
-        }
-
-        // Filter to rows that look like transactions (optional: skip summary rows)
-        const transactionData = data.filter((row) => looksLikeTransactionRow(row, columns));
-
-        resolve({ data: transactionData, columns, metadata });
+        resolve(processRawRows(rawRows));
       },
       error(err) {
         reject(new Error(err.message || 'Failed to parse CSV'));
       },
     });
   });
+}
+
+/** Convert a single cell to string for sheet rows. */
+function cellToString(cell: unknown): string {
+  if (cell == null || cell === '') return '';
+  return String(cell).trim();
+}
+
+/** Convert a sheet row (array or object with numeric keys) to string[]. */
+function sheetRowToArray(row: unknown): string[] {
+  if (Array.isArray(row)) {
+    return row.map(cellToString);
+  }
+  if (row && typeof row === 'object') {
+    const obj = row as Record<string, unknown>;
+    const keys = Object.keys(obj)
+      .filter((k) => /^\d+$/.test(k))
+      .map((k) => parseInt(k, 10));
+    if (keys.length === 0) return [];
+    const max = Math.max(...keys);
+    return Array.from({ length: max + 1 }, (_, i) => cellToString(obj[String(i)]));
+  }
+  return [];
+}
+
+/**
+ * Parse Excel (.xlsx, .xls): first sheet as rows, same header/metadata/footer logic as CSV.
+ * Cell values are stringified so the rest of the pipeline matches CSV.
+ */
+export async function parseXLSX(file: File): Promise<ParseResult> {
+  const XLSX = await import('xlsx');
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: false });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return { data: [], columns: [] };
+  }
+  const sheet = workbook.Sheets[firstSheetName];
+  const sheetData = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+    blankrows: true,
+  }) as unknown[];
+  const rawRows: string[][] = sheetData
+    .map((row) => sheetRowToArray(row))
+    .filter((row) => row.length > 0);
+  if (rawRows.length === 0) {
+    return { data: [], columns: [] };
+  }
+  return processRawRows(rawRows);
 }
 
 /**
@@ -210,22 +278,32 @@ export function detectColumns(data: Record<string, string>[]): string[] {
 
 /**
  * Validate parsed data against column mapping. Returns validation result with errors.
- * When debitCreditType is set, amount and Dr/Cr are in separate columns.
+ * Supports: single Amount; Amount + Dr/Cr; or separate Debit + Credit columns.
  */
 export function validateData(
   data: Record<string, string>[],
   mapping: ColumnMapping
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
-  const required = [
+  const hasDebitCol = Boolean(mapping.debitColumn);
+  const hasCreditCol = Boolean(mapping.creditColumn);
+  if (hasDebitCol !== hasCreditCol) {
+    errors.push('When using separate Debit/Credit columns, both Debit and Credit must be mapped.');
+  }
+  const useSeparateDebitCredit = hasDebitCol && hasCreditCol;
+  const required: string[] = [
     mapping.transactionDate,
     mapping.valueDate,
     mapping.transactionDetails,
     mapping.chqRefNo,
-    mapping.debitCredit,
     mapping.balance,
   ].filter(Boolean);
-  if (mapping.debitCreditType) required.push(mapping.debitCreditType);
+  if (useSeparateDebitCredit) {
+    required.push(mapping.debitColumn!, mapping.creditColumn!);
+  } else {
+    required.push(mapping.debitCredit);
+    if (mapping.debitCreditType) required.push(mapping.debitCreditType);
+  }
 
   if (data.length === 0) {
     errors.push('No rows to validate.');
@@ -246,10 +324,23 @@ export function validateData(
     if (dateVal && isNaN(Date.parse(dateVal)) && !dateLike.test(dateVal)) {
       errors.push(`Row ${i + 1}: Invalid date format in transaction date`);
     }
-    const amtVal = mapping.debitCredit ? row[mapping.debitCredit] : '';
-    const numVal = parseFloat((amtVal ?? '').replace(/[,₹\s]/g, ''));
-    if (amtVal && isNaN(numVal) && amtVal.trim() !== '') {
-      errors.push(`Row ${i + 1}: Invalid amount in debit/credit column`);
+    if (useSeparateDebitCredit) {
+      const debitVal = (row[mapping.debitColumn!] ?? '').trim();
+      const creditVal = (row[mapping.creditColumn!] ?? '').trim();
+      const numDebit = parseFloat((debitVal || '0').replace(/[,₹\s]/g, ''));
+      const numCredit = parseFloat((creditVal || '0').replace(/[,₹\s]/g, ''));
+      if (debitVal && isNaN(numDebit)) {
+        errors.push(`Row ${i + 1}: Invalid amount in Debit column`);
+      }
+      if (creditVal && isNaN(numCredit)) {
+        errors.push(`Row ${i + 1}: Invalid amount in Credit column`);
+      }
+    } else {
+      const amtVal = mapping.debitCredit ? row[mapping.debitCredit] : '';
+      const numVal = parseFloat((amtVal ?? '').replace(/[,₹\s]/g, ''));
+      if (amtVal && isNaN(numVal) && amtVal.trim() !== '') {
+        errors.push(`Row ${i + 1}: Invalid amount in debit/credit column`);
+      }
     }
   }
 

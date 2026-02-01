@@ -9,6 +9,8 @@ const FIELDS: (keyof ColumnMapping)[] = [
   'chqRefNo',
   'debitCredit',
   'debitCreditType',
+  'debitColumn',
+  'creditColumn',
   'balance',
 ];
 
@@ -19,6 +21,8 @@ const FIELD_LABELS: Record<keyof ColumnMapping, string> = {
   chqRefNo: 'Chq / Ref No',
   debitCredit: 'Amount',
   debitCreditType: 'Dr/Cr (optional)',
+  debitColumn: 'Debit column (optional)',
+  creditColumn: 'Credit column (optional)',
   balance: 'Balance',
 };
 
@@ -36,6 +40,8 @@ const emptyMapping = (): ColumnMapping => ({
   chqRefNo: '',
   debitCredit: '',
   debitCreditType: '',
+  debitColumn: '',
+  creditColumn: '',
   balance: '',
 });
 
@@ -48,13 +54,17 @@ export function ColumnMapper({ columns, data, onConfirm, onCancel }: ColumnMappe
       const lower = col.toLowerCase();
       if (lower.includes('transaction date') || lower === 'date') m.transactionDate = col;
       else if (lower.includes('value date')) m.valueDate = col;
-      else if (lower.includes('detail') || lower.includes('description')) m.transactionDetails = col;
-      else if (lower.includes('chq') || lower.includes('ref')) m.chqRefNo = col;
+      else if (lower.includes('detail') || lower.includes('description') || lower.includes('particulars')) m.transactionDetails = col;
+      else if (lower.includes('chq') || lower.includes('ref') || lower.includes('cheque')) m.chqRefNo = col;
       else if (lower === 'amount') {
         m.debitCredit = col;
         amountCol = col;
       } else if (/^dr\s*\/\s*cr$/i.test(lower) || lower === 'dr / cr') {
-        if (!m.debitCreditType) m.debitCreditType = col; // first Dr/Cr column = for amount
+        if (!m.debitCreditType) m.debitCreditType = col;
+      } else if (lower === 'debit' || (lower.includes('debit') && !lower.includes('credit'))) {
+        m.debitColumn = col;
+      } else if (lower === 'credit' || (lower.includes('credit') && !lower.includes('debit'))) {
+        m.creditColumn = col;
       } else if (lower.includes('debit') || lower.includes('credit')) {
         if (!m.debitCredit) m.debitCredit = col;
         else if (!m.debitCreditType) m.debitCreditType = col;

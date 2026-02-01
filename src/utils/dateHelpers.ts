@@ -11,6 +11,8 @@ const DATE_FORMATS = [
   'dd.MM.yyyy',
   'd/M/yyyy',
   'dd/MM/yy',
+  'dd-MMM-yyyy', // Excel: 21-Sep-2025
+  'd-MMM-yyyy',
   // With time
   'd/M/yyyy H:mm',
   'dd/MM/yyyy HH:mm',

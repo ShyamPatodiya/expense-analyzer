@@ -24,8 +24,9 @@ export function getMonthlySummary(transactions: Transaction[]): MonthlyData[] {
   const result: MonthlyData[] = [];
   const sorted = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   let runningBalance = 0;
-  for (const [month, { income, expense }] of sorted) {
+  for (const [monthKey, { income, expense }] of sorted) {
     runningBalance += income - expense;
+    const month = format(new Date(monthKey + '-01'), 'MMM-yyyy');
     result.push({
       month,
       income,
@@ -76,5 +77,18 @@ export function getTopExpenses(
   return transactions
     .filter((t) => t.debitCredit < 0)
     .sort((a, b) => a.debitCredit - b.debitCredit) // most negative first
+    .slice(0, limit);
+}
+
+/**
+ * Top N incomes (largest credits).
+ */
+export function getTopIncomes(
+  transactions: Transaction[],
+  limit: number
+): Transaction[] {
+  return transactions
+    .filter((t) => t.debitCredit > 0)
+    .sort((a, b) => b.debitCredit - a.debitCredit) // largest first
     .slice(0, limit);
 }

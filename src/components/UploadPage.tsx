@@ -15,9 +15,18 @@ function generateId(): string {
 }
 
 /**
- * When Amount and Dr/Cr are in separate columns: combine to signed debitCredit.
+ * Compute signed debitCredit from row using mapping.
+ * Supports: separate Debit/Credit columns (Debit has value → DR, Credit has value → CR);
+ * or single Amount + optional Dr/Cr column; or single Amount.
  */
 function parseDebitCredit(row: Record<string, string>, mapping: ColumnMapping): number {
+  if (mapping.debitColumn && mapping.creditColumn) {
+    const debitStr = (row[mapping.debitColumn] ?? '').trim();
+    const creditStr = (row[mapping.creditColumn] ?? '').trim();
+    if (debitStr) return -Math.abs(parseCurrency(debitStr));
+    if (creditStr) return Math.abs(parseCurrency(creditStr));
+    return 0;
+  }
   const amtStr = (row[mapping.debitCredit] ?? '0').trim();
   const drCrCol = mapping.debitCreditType ? (row[mapping.debitCreditType] ?? '').trim().toUpperCase() : '';
   if (mapping.debitCreditType && drCrCol) {
@@ -30,9 +39,11 @@ function parseDebitCredit(row: Record<string, string>, mapping: ColumnMapping): 
 function mapToTransactions(
   data: Record<string, string>[],
   mapping: ColumnMapping,
-  source: string
+  source: string,
+  bank?: string
 ): Transaction[] {
   const now = new Date();
+  const bankVal = (bank ?? '').trim() || undefined;
   const result: Transaction[] = [];
   for (const row of data) {
     const txDate = parseDate(row[mapping.transactionDate] ?? '');
@@ -54,6 +65,7 @@ function mapToTransactions(
       tags: [],
       source,
       uploadDate: now,
+      bank: bankVal,
     });
   }
   return result;
@@ -68,6 +80,7 @@ type ImportProgress = { total: number; processed: number; added: number };
 export function UploadPage({ onImportComplete }: UploadPageProps) {
   const [step, setStep] = useState<'upload' | 'map'>('upload');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [bankName, setBankName] = useState('');
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [importError, setImportError] = useState('');
   const [importedCount, setImportedCount] = useState(0);
@@ -86,7 +99,8 @@ export function UploadPage({ onImportComplete }: UploadPageProps) {
       const transactions = mapToTransactions(
         parseResult.data,
         mapping,
-        source
+        source,
+        bankName
       );
       const total = transactions.length;
       setImportProgress({ total, processed: 0, added: 0 });
@@ -106,6 +120,7 @@ export function UploadPage({ onImportComplete }: UploadPageProps) {
         setImportedCount(toAdd.length);
         setStep('upload');
         setParseResult(null);
+        setBankName('');
         onImportComplete();
       } catch (err) {
         setImportError(err instanceof Error ? err.message : 'Import failed');
@@ -113,7 +128,7 @@ export function UploadPage({ onImportComplete }: UploadPageProps) {
         setImportProgress(null);
       }
     },
-    [parseResult, onImportComplete]
+    [parseResult, bankName, onImportComplete]
   );
 
   const handleCancelMapping = useCallback(() => {
@@ -175,6 +190,24 @@ export function UploadPage({ onImportComplete }: UploadPageProps) {
               </dl>
             </div>
           )}
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 space-y-4">
+            <div>
+              <label htmlFor="bank-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Bank (optional)
+              </label>
+              <input
+                id="bank-name"
+                type="text"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="e.g. HDFC, SBI"
+                className="w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Tag this import with a bank name so you can identify which bank these records are from.
+              </p>
+            </div>
+          </div>
           <ColumnMapper
             columns={parseResult.columns}
             data={parseResult.data}

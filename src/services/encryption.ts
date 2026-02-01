@@ -4,7 +4,7 @@
  * CBC mode requires an IV (initialization vector); we generate one per encryption
  * and store as "ivHex:ctBase64" so decryption can use the same IV.
  */
-import CryptoJS from 'crypto-js/crypto-js.js';
+import CryptoJS from 'crypto-js';
 
 const STORAGE_KEY = 'expense_analyzer_enc';
 const SALT_KEY = 'expense_analyzer_salt';

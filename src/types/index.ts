@@ -10,6 +10,8 @@ export interface Transaction {
   tags?: string[];
   source: string;
   uploadDate: Date;
+  /** Optional bank name set at import time (e.g. "HDFC", "SBI") */
+  bank?: string;
 }
 
 export interface ColumnMapping {
@@ -18,8 +20,11 @@ export interface ColumnMapping {
   transactionDetails: string;
   chqRefNo: string;
   debitCredit: string;
-    /** Optional: when amount and Dr/Cr are in separate columns (e.g. "Amount" + "Dr / Cr") */
+  /** Optional: when amount and Dr/Cr are in separate columns (e.g. "Amount" + "Dr / Cr") */
   debitCreditType?: string;
+  /** Optional: when Excel/CSV has separate Debit and Credit columns; if Debit has value → DR, if Credit has value → CR */
+  debitColumn?: string;
+  creditColumn?: string;
   balance: string;
 }
 
@@ -42,6 +47,8 @@ export interface FilterOptions {
   transactionType: 'all' | 'debit' | 'credit';
   searchText: string;
   categories: string[];
+  /** Filter by bank name (optional column set at import time) */
+  banks: string[];
 }
 
 export interface MonthlyData {

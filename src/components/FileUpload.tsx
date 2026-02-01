@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import { Upload, FileText, FileSpreadsheet, Loader2 } from 'lucide-react';
-import { parseCSV, parsePDF, type ParseResult } from '../services/fileParser';
+import { parseCSV, parsePDF, parseXLSX, type ParseResult } from '../services/fileParser';
 
 interface FileUploadProps {
   onParsed: (result: ParseResult) => void;
 }
 
-const ACCEPT = '.csv,.pdf';
+const ACCEPT = '.csv,.pdf,.xlsx,.xls';
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export function FileUpload({ onParsed }: FileUploadProps) {
@@ -21,15 +21,21 @@ export function FileUpload({ onParsed }: FileUploadProps) {
       setFileName(file.name);
       setLoading(true);
       try {
-        const ext = file.name.toLowerCase().slice(-4);
-        if (ext === '.csv') {
+        const name = file.name.toLowerCase();
+        const isCsv = name.endsWith('.csv');
+        const isPdf = name.endsWith('.pdf');
+        const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls');
+        if (isCsv) {
           const result = await parseCSV(file);
           onParsed(result);
-        } else if (ext === '.pdf') {
+        } else if (isPdf) {
           const result = await parsePDF(file);
           onParsed(result);
+        } else if (isExcel) {
+          const result = await parseXLSX(file);
+          onParsed(result);
         } else {
-          throw new Error('Only CSV and PDF files are supported.');
+          throw new Error('Only CSV, Excel (.xlsx, .xls), and PDF files are supported.');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to parse file');
@@ -109,11 +115,11 @@ export function FileUpload({ onParsed }: FileUploadProps) {
             {loading ? 'Parsing...' : 'Drop file here or click to upload'}
           </p>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            CSV or PDF, max 10MB
+            CSV, Excel (.xlsx, .xls), or PDF, max 10MB
           </p>
           {fileName && !loading && (
             <p className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-1">
-              {fileName.endsWith('.csv') ? (
+              {/\.(csv|xlsx|xls)$/i.test(fileName) ? (
                 <FileSpreadsheet size={14} />
               ) : (
                 <FileText size={14} />

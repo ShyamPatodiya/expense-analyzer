@@ -7,6 +7,7 @@ interface FilterPanelProps {
   filters: FilterOptions;
   onChange: (filters: FilterOptions) => void;
   categories: string[];
+  banks: string[];
 }
 
 const PRESETS = [
@@ -14,7 +15,7 @@ const PRESETS = [
   { label: 'Last 3 Months', getRange: getLastThreeMonthsRange },
 ];
 
-export function FilterPanel({ filters, onChange, categories }: FilterPanelProps) {
+export function FilterPanel({ filters, onChange, categories, banks }: FilterPanelProps) {
   const setPreset = useCallback(
     (getRange: () => { start: Date; end: Date }) => {
       const { start, end } = getRange();
@@ -40,6 +41,7 @@ export function FilterPanel({ filters, onChange, categories }: FilterPanelProps)
       transactionType: 'all',
       searchText: '',
       categories: [],
+      banks: [],
     });
   }, [onChange]);
 
@@ -53,6 +55,16 @@ export function FilterPanel({ filters, onChange, categories }: FilterPanelProps)
     [filters.categories, update]
   );
 
+  const toggleBank = useCallback(
+    (bank: string) => {
+      const list = filters.banks.includes(bank)
+        ? filters.banks.filter((b) => b !== bank)
+        : [...filters.banks, bank];
+      update({ banks: list });
+    },
+    [filters.banks, update]
+  );
+
   const hasActive =
     filters.dateRange.start ||
     filters.dateRange.end ||
@@ -60,7 +72,8 @@ export function FilterPanel({ filters, onChange, categories }: FilterPanelProps)
     filters.amountRange.max != null ||
     filters.transactionType !== 'all' ||
     filters.searchText.trim() !== '' ||
-    filters.categories.length > 0;
+    filters.categories.length > 0 ||
+    filters.banks.length > 0;
 
   return (
     <div className="space-y-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -217,6 +230,30 @@ export function FilterPanel({ filters, onChange, categories }: FilterPanelProps)
                 }`}
               >
                 {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bank (Bank Name) */}
+      {banks.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+            Bank
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {banks.map((bank) => (
+              <button
+                key={bank}
+                onClick={() => toggleBank(bank)}
+                className={`px-3 py-1.5 text-xs rounded-lg ${
+                  filters.banks.includes(bank)
+                    ? 'bg-indigo-600 text-white'
+                    : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {bank}
               </button>
             ))}
           </div>
