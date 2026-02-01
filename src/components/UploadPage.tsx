@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { Loader2 } from 'lucide-react';
 import { FileUpload } from './FileUpload';
 import { ColumnMapper } from './ColumnMapper';
 import type { ParseResult } from '../services/fileParser';
@@ -62,10 +63,12 @@ interface UploadPageProps {
   onImportComplete: () => void;
 }
 
+type ImportProgress = { total: number; processed: number; added: number };
+
 export function UploadPage({ onImportComplete }: UploadPageProps) {
   const [step, setStep] = useState<'upload' | 'map'>('upload');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [importError, setImportError] = useState('');
   const [importedCount, setImportedCount] = useState(0);
 
@@ -78,35 +81,36 @@ export function UploadPage({ onImportComplete }: UploadPageProps) {
   const handleConfirmMapping = useCallback(
     async (mapping: ColumnMapping) => {
       if (!parseResult) return;
-      setImporting(true);
       setImportError('');
+      const source = 'upload';
+      const transactions = mapToTransactions(
+        parseResult.data,
+        mapping,
+        source
+      );
+      const total = transactions.length;
+      setImportProgress({ total, processed: 0, added: 0 });
+      const toAdd: Transaction[] = [];
       try {
-        const source = 'upload';
-        const transactions = mapToTransactions(
-          parseResult.data,
-          mapping,
-          source
-        );
-        let added = 0;
-        const toAdd: Transaction[] = [];
-        for (const t of transactions) {
+        for (let i = 0; i < transactions.length; i++) {
+          const t = transactions[i];
           const isDup = await db.checkDuplicates(t);
           if (!isDup) {
             toAdd.push(t);
-            added++;
           }
+          setImportProgress({ total, processed: i + 1, added: toAdd.length });
         }
         if (toAdd.length > 0) {
           await db.addTransactions(toAdd);
         }
-        setImportedCount(added);
+        setImportedCount(toAdd.length);
         setStep('upload');
         setParseResult(null);
         onImportComplete();
       } catch (err) {
         setImportError(err instanceof Error ? err.message : 'Import failed');
       } finally {
-        setImporting(false);
+        setImportProgress(null);
       }
     },
     [parseResult, onImportComplete]
@@ -177,10 +181,28 @@ export function UploadPage({ onImportComplete }: UploadPageProps) {
             onConfirm={handleConfirmMapping}
             onCancel={handleCancelMapping}
           />
-          {importing && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Importing...
-            </p>
+          {importProgress !== null && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+              aria-busy="true"
+              aria-live="polite"
+            >
+              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl px-8 py-6 flex flex-col items-center gap-4 min-w-[240px]">
+                <Loader2
+                  className="h-10 w-10 text-indigo-600 dark:text-indigo-400 animate-spin"
+                  aria-hidden
+                />
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Importing...
+                </p>
+                <p className="text-lg font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">
+                  {importProgress.added} imported out of {importProgress.total}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {importProgress.processed} of {importProgress.total} processed
+                </p>
+              </div>
+            </div>
           )}
           {importError && (
             <p className="text-sm text-red-600 dark:text-red-400">{importError}</p>
