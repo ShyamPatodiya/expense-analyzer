@@ -52,8 +52,11 @@ const TOOLTIP_STYLE_DARK: CSSProperties = {
   borderRadius: '12px',
   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
   padding: '12px 16px',
-  color: '#f1f5f9',
+  color: '#ffffff',
 };
+
+/** Tooltip label/item text – dark mode (white) */
+const TOOLTIP_TEXT_DARK: CSSProperties = { color: '#ffffff' };
 
 export function Charts({ transactions, dateRange, darkMode = false }: ChartsProps) {
   const tooltipStyle = darkMode ? TOOLTIP_STYLE_DARK : TOOLTIP_STYLE_LIGHT;
@@ -145,7 +148,12 @@ export function Charts({ transactions, dateRange, darkMode = false }: ChartsProp
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => `₹${v.toLocaleString('en-IN')}`} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                labelStyle={darkMode ? TOOLTIP_TEXT_DARK : undefined}
+                itemStyle={darkMode ? TOOLTIP_TEXT_DARK : undefined}
+                formatter={(v: number) => `₹${v.toLocaleString('en-IN')}`}
+              />
               <Legend />
             </PieChart>
           </ResponsiveContainer>

@@ -5,6 +5,7 @@ import {
   List,
   Upload,
   Settings,
+  Info,
   Lock,
   Menu,
   X,
@@ -24,6 +25,7 @@ const nav = [
   { path: '/transactions', label: 'Transactions', icon: List },
   { path: '/upload', label: 'Upload', icon: Upload },
   { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/about', label: 'About', icon: Info },
 ];
 
 export function Layout({ children, onLogout, darkMode, onDarkModeToggle }: LayoutProps) {

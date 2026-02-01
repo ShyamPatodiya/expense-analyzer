@@ -6,6 +6,7 @@ import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { FilterPanel } from './components/FilterPanel';
 import { UploadPage } from './components/UploadPage';
+import { AboutPage } from './components/AboutPage';
 import { useEncryption } from './hooks/useEncryption';
 import { useTransactions } from './hooks/useTransactions';
 import { useFilters } from './hooks/useFilters';
@@ -181,6 +182,7 @@ function AppWithRouter({ logout }: { logout: () => void }) {
       onDarkModeToggle={() => setDarkMode((d) => !d)}
     >
       <Routes>
+        <Route path="/about" element={<AboutPage />} />
         <Route
           path="/"
           element={
